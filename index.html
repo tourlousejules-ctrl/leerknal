@@ -50,7 +50,7 @@ const app=document.getElementById('app'),$=id=>document.getElementById(id);
 const AI_URL='';
 let timer=null,keyH=null;
 const SH=['▲','◆','●','■'];
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const shuffle=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
 const norm=s=>String(s).toLowerCase().replace(/[’‘]/g,"'").replace(/\s+/g,' ').trim();
 function stop(){clearInterval(timer);timer=null;keyH=null}
@@ -121,7 +121,7 @@ async function askAI(prompt,btn,msg){
     return r;
   }catch(e){
     const c=e&&e.code;
-    msg.textContent=(c==='none'||c==='not_granted')?'AI is hier niet ingesteld. Vul AI_URL in (zie leerknal-worker.js) of open de pagina via claude.ai.':c==='rate_limited'?'Even te druk. Wacht een minuut en probeer opnieuw.':'Dat lukte niet. Probeer opnieuw, eventueel met minder tekst.';
+    msg.textContent=(c==='none'||c==='not_granted')?'AI is hier niet ingesteld. Vul AI_URL in (zie leerknal-worker.js) of open de pagina via claude.ai. Of kies “Maak quiz zonder AI”.':c==='rate_limited'?'Even te druk. Wacht een minuut en probeer opnieuw.':'Dat lukte niet. Probeer opnieuw, eventueel met minder tekst.';
     return null;
   }finally{btn.disabled=false;btn.textContent=old}
 }
@@ -243,7 +243,7 @@ function aiScreen(){show(`${back}<h1 style="font-size:2.2rem">AI-quiz</h1><div c
 <label for="lw">Leerwijzer (wat moet je kennen?)</label>${upl('lw')}<textarea id="lw" placeholder="Plak hier je leerwijzer of leerstofoverzicht…"></textarea>
 <label for="cu">Cursus (de leerstof zelf)</label>${upl('cu')}<textarea id="cu" style="min-height:220px" placeholder="Plak hier de tekst van je cursus of samenvatting…"></textarea>
 <label for="qn">Naam van de quiz (optioneel)</label><input id="qn" maxlength="60"><label for="n">Aantal vragen (3 tot 30)</label><input type="number" id="n" min="3" max="30" value="12">
-<p class="err" id="msg"></p><button class="btn" data-a="aigo">Maak mijn quiz</button></div>`)}
+<p class="err" id="msg"></p><button class="btn" data-a="aigo">Maak mijn quiz met AI</button><button class="btn ghost" data-a="aino">Maak quiz zonder AI (werkt overal)</button><button class="btn ghost" data-a="aibr">Maak quiz met AI in je browser (zwaar, eerste keer ±1 GB)</button><p style="font-size:.9rem;margin:8px 0 0">Zonder AI maakt de pagina invulvragen uit je tekst: een zin waarin een woord ontbreekt.</p></div>`)}
 
 function taalScreen(){show(`${back}<h1 style="font-size:2.2rem">Taaltrainer</h1><div class="card">
 <div class="row"><div><label for="tt">Taal</label><select id="tt"><option>Engels</option><option>Frans</option><option>Duits</option><option>Spaans</option></select></div>
@@ -290,6 +290,66 @@ app.onchange=async e=>{
     st.textContent=`${f.files[0].name} gelezen (${t.length} tekens).`+(t.length>max?` Alleen de eerste ${max} tekens worden gebruikt: kies een kleiner paginabereik en laad het bestand opnieuw.`:' Je kunt de tekst hieronder nog aanpassen.');
   }catch(err){st.textContent=err&&err.message==='lib'?'De pdf-lezer kon niet laden. Plak de tekst zelf in het vak.':'Dit bestand kon ik niet lezen. Plak de tekst zelf in het vak.'}
 };
+
+/* ---------- quiz zonder AI (invulvragen uit je eigen tekst) ---------- */
+const STOP=new Set('zullen worden werden wordt hebben gewoon alleen tussen tijdens andere bijvoorbeeld bovendien omdat waarbij daarom daarna ervoor eigenlijk meestal soms vooral dezelfde elkaar zodat tegenover binnen buiten tijdens through which these there their about would could should'.split(' '));
+const WRD=x=>x.match(/[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’-]{5,}/g)||[];
+function localQs(cu,lw,n){
+  const sents=cu.replace(/\s+/g,' ').split(/(?<=[.!?])\s+/).map(x=>x.trim()).filter(x=>x.length>=40&&x.length<=220);
+  const inLw=new Set(WRD(lw).map(x=>x.toLowerCase())),pool=[...new Set(WRD(cu).map(x=>x.toLowerCase()))].filter(w=>!STOP.has(w)),out=[];
+  for(const s of shuffle(sents)){
+    const low=s.toLowerCase(),ws=WRD(s).slice(1).map(w=>w.toLowerCase()).filter(w=>!STOP.has(w));
+    if(!ws.length)continue;
+    const ans=ws.sort((a,b)=>(inLw.has(b)-inLw.has(a))||(b.length-a.length))[0],i=low.indexOf(ans);
+    if(i<0||/[A-Za-zÀ-ÿ]/.test(low[i-1]||' ')||/[A-Za-zÀ-ÿ]/.test(low[i+ans.length]||' '))continue;
+    let d=pool.filter(w=>w!==ans&&!low.includes(w)&&Math.abs(w.length-ans.length)<=3);
+    if(d.length<3)d=pool.filter(w=>w!==ans&&!low.includes(w));
+    if(d.length<3)continue;
+    out.push({q:s.slice(0,i)+'_____'+s.slice(i+ans.length),o:[ans,...shuffle(d).slice(0,3)],a:0,e:s});
+    if(out.length>=n)break;
+  }
+  return out;
+}
+function aino(){
+  const lw=$('lw').value.trim().slice(0,15000),cu=$('cu').value.trim().slice(0,60000),m=$('msg'),n=Math.min(30,Math.max(3,parseInt($('n').value)||12));
+  if(cu.length<150){m.textContent='Plak eerst meer cursustekst (minstens een paar zinnen).';return}
+  const qs=localQs(cu,lw,n);
+  if(qs.length<3){m.textContent='Er is te weinig bruikbare tekst voor invulvragen. Plak meer tekst (volledige zinnen).';return}
+  const sv=addQuiz({name:$('qn').value.trim()||('Quiz '+new Date().toLocaleDateString('nl-BE')),type:'qs',qs});
+  play(qs,{limit:25,saved:sv});
+}
+
+/* ---------- AI in de browser (WebLLM, alleen voor zelf hosten) ---------- */
+let eng=null;
+async function aibr(b){
+  const m=$('msg'),cu0=$('cu').value.trim().slice(0,60000),lw=$('lw').value.trim().slice(0,800),n=Math.min(20,Math.max(3,parseInt($('n').value)||12));
+  if(cu0.length<150){m.textContent='Plak eerst meer cursustekst (minstens een paar zinnen).';return}
+  if(!navigator.gpu){m.textContent='Dit toestel of deze browser ondersteunt WebGPU niet. Gebruik Chrome of Edge op een computer, of kies “zonder AI”.';return}
+  const old=b.textContent;b.disabled=true;m.style.color='var(--ink)';
+  try{
+    if(!eng){
+      m.textContent='Model wordt geladen (eenmalig, ongeveer 1 GB)…';
+      const wl=await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.79/+esm');
+      eng=await wl.CreateMLCEngine('Qwen2.5-1.5B-Instruct-q4f16_1-MLC',{initProgressCallback:p=>{m.textContent='Model laden: '+Math.round((p.progress||0)*100)+'% (eenmalig)'}});
+    }
+    const sents=cu0.replace(/\s+/g,' ').split(/(?<=[.!?])\s+/),qs=[],seen=new Set();
+    const chunk=()=>{let i=Math.random()*sents.length|0,t='';while(i<sents.length&&t.length<2200)t+=sents[i++]+' ';return t.trim()};
+    for(let k=0;k<Math.ceil(n/2)+4&&qs.length<n;k++){
+      m.textContent=`Vragen maken… ${qs.length} van ${n}`;
+      const p=`Je bent een leerkracht. Lees de tekst en maak 2 meerkeuzevragen over de inhoud van de tekst, in dezelfde taal als de tekst. Elke vraag heeft precies 4 korte antwoordopties, één juist. ${lw?'De leerling moet vooral dit kennen: '+lw+'\n':''}Antwoord ENKEL met een JSON-array, zonder andere tekst: [{"q":"vraag","o":["A","B","C","D"],"a":0,"e":"korte uitleg"}] waarbij "a" de index (0-3) van het juiste antwoord is.\n\nTekst:\n${chunk()}`;
+      try{
+        const r=await eng.chat.completions.create({messages:[{role:'user',content:p}],temperature:.4,max_tokens:700});
+        const t=r.choices[0].message.content,arr=JSON.parse(t.slice(t.indexOf('['),t.lastIndexOf(']')+1));
+        arr.forEach(x=>{if(x&&typeof x.q==='string'&&x.q.length>=10&&Array.isArray(x.o)&&x.o.length===4&&Number.isInteger(x.a)&&x.a>=0&&x.a<4&&new Set(x.o.map(norm)).size===4&&!seen.has(norm(x.q))&&qs.length<n){seen.add(norm(x.q));qs.push({q:x.q,o:x.o.map(String),a:x.a,e:x.e?String(x.e):''})}});
+      }catch(e){}
+    }
+    m.style.color='';
+    if(qs.length<3){m.textContent='Het model maakte geen bruikbare vragen. Probeer opnieuw of kies “zonder AI”.';return}
+    const sv=addQuiz({name:$('qn').value.trim()||('AI-quiz '+new Date().toLocaleDateString('nl-BE')),type:'qs',qs});
+    play(qs,{limit:25,saved:sv});
+  }catch(e){m.style.color='';m.textContent='Het model laden of gebruiken mislukte (te weinig geheugen of geen verbinding?). Kies “zonder AI” of probeer een computer met Chrome.'}
+  finally{b.disabled=false;b.textContent=old}
+}
 
 /* ---------- AI-quiz ---------- */
 async function aigo(b){
@@ -346,13 +406,13 @@ function frgo(){
   for(const v of V)for(let k=0;k<6;k++)for(const tt of(t==='mix'?'pcf':t)){
     const ans=form(v,tt,k),pr=k===0&&/^[aeiouhéèêàâîï]/.test(ans)?'j’':PR[k],q=`${pr} ___  (${v.inf} · ${v.nl}) — ${TN[tt]}`;
     if(m==='type'){all.push({type:'type',q,ans});continue}
-    const pool=[...new Set([0,1,2,3,4,5].map(j=>form(v,tt,j)).concat([...'pcf'].filter(z=>z!==tt).map(z=>form(v,z,k))))].filter(x=>x!==ans);
+    const pool=[...new Set([0,1,2,3,4,5].map(j=>form(v,tt,j)).concat([...'pcf'].filter(z=>z!==tt).map(z=>form(v,z,k)))].filter(x=>x!==ans);
     all.push({q,o:[ans,...shuffle(pool).slice(0,3)],a:0});
   }
   const qs=shuffle(all);play(n?qs.slice(0,n):qs,{limit:15});
 }
 
-const A={home,multi:multiScreen,host,join,mine:savedScreen,sv:startSaved,svgo:playSaved,del(b){if(!b.dataset.sure){b.dataset.sure=1;b.textContent='Zeker?';return}save(load().filter(q=>String(q.id)!==b.dataset.id));savedScreen()},ai:aiScreen,taal:taalScreen,fr:frScreen,aigo,tlai,tlown,frgo};
+const A={home,aino,aibr,multi:multiScreen,host,join,mine:savedScreen,sv:startSaved,svgo:playSaved,del(b){if(!b.dataset.sure){b.dataset.sure=1;b.textContent='Zeker?';return}save(load().filter(q=>String(q.id)!==b.dataset.id));savedScreen()},ai:aiScreen,taal:taalScreen,fr:frScreen,aigo,tlai,tlown,frgo};
 app.onclick=e=>{const b=e.target.closest('[data-a]');if(b&&A[b.dataset.a])A[b.dataset.a](b)};
 home();
 </script></body></html>
