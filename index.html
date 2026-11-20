@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="nl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LeerKnal – oefen als een quiz</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap">
+<style>
+:root{--bg:#46178f;--card:#fff;--ink:#1f1235;--soft:#efe8fb;--r:#e21b3c;--b:#1368ce;--y:#ffc00a;--g:#26890c;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1d0b3a;--card:#2a1650;--ink:#f3ecff;--soft:#3a2466}}
+:root[data-theme="dark"]{--bg:#1d0b3a;--card:#2a1650;--ink:#f3ecff;--soft:#3a2466}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;min-height:100%;background:var(--bg);color:#fff;font-family:"Baloo 2","Trebuchet MS",system-ui,sans-serif;font-size:1.05rem}
+.wrap{max-width:760px;margin:0 auto;padding:18px 16px 48px}
+h1{font-size:clamp(2.4rem,9vw,3.6rem);font-weight:800;line-height:1;margin:.2em 0 .1em}
+.sub{opacity:.9;margin:0}
+.menu{display:grid;gap:14px;margin-top:24px}
+.big{border:0;border-radius:14px;padding:18px 20px;color:#fff;text-align:left;font:inherit;cursor:pointer;box-shadow:0 6px 0 rgba(0,0,0,.28);display:flex;gap:16px;align-items:center}
+.big:active,.btn:active,.tile:active{transform:translateY(4px);box-shadow:0 2px 0 rgba(0,0,0,.28)}
+.big b{font-size:1.5rem;display:block;line-height:1.1}.big .i{font-size:2.4rem}
+.c-y{background:var(--y);color:#2b1a00}.card .btn.ghost{background:var(--soft);color:var(--ink)}
+.c-p{background:#864cbf}
+.c-b,.t1{background:var(--b)}.c-r,.t0{background:var(--r)}.c-g,.t3{background:var(--g)}.t2{background:var(--y);color:#2b1a00}
+.card{background:var(--card);color:var(--ink);border-radius:14px;padding:18px;margin-top:14px}
+label{display:block;font-weight:700;margin:12px 0 4px}
+textarea,input,select{width:100%;font:inherit;font-weight:500;padding:10px 12px;border-radius:10px;border:2px solid var(--soft);background:var(--card);color:var(--ink)}
+textarea{min-height:130px;resize:vertical}
+.btn{border:0;border-radius:12px;padding:13px 20px;font:inherit;font-weight:800;font-size:1.1rem;background:var(--y);color:#2b1a00;box-shadow:0 5px 0 rgba(0,0,0,.28);cursor:pointer;width:100%;margin-top:12px}
+.btn.ghost{background:rgba(255,255,255,.18);color:#fff}.btn:disabled{opacity:.6;cursor:default}
+.link{background:none;border:0;color:#fff;font:inherit;font-weight:700;cursor:pointer;padding:6px 0}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1 1 140px}
+.top{display:flex;justify-content:space-between;gap:8px;font-weight:700}
+.pill{background:rgba(0,0,0,.28);border-radius:99px;padding:4px 14px}
+.bar{height:10px;background:rgba(0,0,0,.3);border-radius:9px;overflow:hidden;margin:10px 0}.bar i{display:block;height:100%;background:var(--y);width:100%}
+.q{background:var(--card);color:var(--ink);border-radius:14px;padding:22px 18px;font-size:1.35rem;font-weight:700;text-align:center;line-height:1.25;min-height:110px;display:grid;place-items:center}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+@media(max-width:480px){.tiles{grid-template-columns:1fr}}
+.tile{border:0;border-radius:12px;padding:16px 12px;min-height:84px;font:inherit;font-weight:700;font-size:1.1rem;color:#fff;display:flex;gap:10px;align-items:center;text-align:left;cursor:pointer;box-shadow:0 5px 0 rgba(0,0,0,.28)}
+.tile.t2{color:#2b1a00}.tile .sh{font-size:1.5rem;flex:none}
+.tile.dim{opacity:.35}.tile.ok{outline:4px solid #fff}.tile:disabled{cursor:default}
+:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.fb{border-radius:14px;padding:14px;margin-top:14px;text-align:center;color:#fff;font-weight:700}
+.fb.ok{background:var(--g)}.fb.no{background:var(--r)}.fb small{display:block;font-weight:500;margin-top:4px}
+.score{font-size:4rem;font-weight:800;line-height:1}
+ul{padding-left:1.1em}li{margin:.6em 0}
+.err{min-height:1.4em;color:var(--r);font-weight:700;margin:10px 0 0}
+</style></head><body><main id="app"></main>
+<script>
+const app=document.getElementById('app'),$=id=>document.getElementById(id);
+/* Zet hier het adres van je AI-proxy (zie leerknal-worker.js), bv. 'https://leerknal.jouwnaam.workers.dev' */
+const AI_URL='';
+let timer=null,keyH=null;
+const SH=['▲','◆','●','■'];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const shuffle=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
+const norm=s=>String(s).toLowerCase().replace(/[’‘]/g,"'").replace(/\s+/g,' ').trim();
+function stop(){clearInterval(timer);timer=null;keyH=null}
+function show(h){stop();app.innerHTML='<div class="wrap">'+h+'</div>';scrollTo(0,0)}
+document.addEventListener('keydown',e=>{if(keyH&&!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))keyH(e)});
+const back='<button class="link" data-a="home">← Menu</button>';
+
+/* ---------- spelmotor (Kahoot-stijl) ---------- */
+function play(qs,c){
+  const typ=qs.some(q=>q.type==='type');
+  show(`${back}<div class="card" style="text-align:center"><div style="font-size:3rem">🎮</div><h2 style="margin:.2em 0">Klaar om te beginnen?</h2><p>${qs.length} vragen · ${(c.limit||20)*(typ?2:1)} seconden per vraag<br>Hoe sneller je goed antwoordt, hoe meer punten.</p><button class="btn" id="go">Start de quiz</button></div>`);
+  $('go').onclick=()=>run(qs,c);$('go').focus();
+}
+function run(qs,c){
+  let i=0,score=0,streak=0,best=0,res=[];const L=c.limit||20;
+  function next(){
+    const q=qs[i],typ=q.type==='type',T=typ?L*2:L;let t0=Date.now(),done=false;
+    const opts=typ?[]:shuffle(q.o.map((t,k)=>({t,ok:k===q.a})));
+    show(`<div class="top"><span class="pill">${i+1} / ${qs.length}</span><span class="pill">🔥 ${streak}</span><span class="pill">${score} punten</span></div><div class="bar"><i id="tb"></i></div><div class="q">${esc(q.q)}</div>`+
+      (typ?`<div class="card"><input id="ti" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Typ je antwoord"><button class="btn" id="tc">Controleer</button></div>`
+      :`<div class="tiles">${opts.map((o,k)=>`<button class="tile t${k}"><span class="sh">${SH[k]}</span>${esc(o.t)}</button>`).join('')}</div>`)+'<div id="fb"></div>');
+    const tiles=[...app.querySelectorAll('.tile')];
+    function fin(ok,timeout,given){
+      if(done)return;done=true;stop();
+      const left=Math.max(0,1-(Date.now()-t0)/(T*1000));let pts=0;
+      if(ok){streak++;best=Math.max(best,streak);pts=Math.round(500+500*left)+Math.min(streak-1,5)*50;score+=pts}else streak=0;
+      res.push({q,ok});
+      tiles.forEach((b,k)=>{b.disabled=true;b.classList.add(opts[k].ok?'ok':'dim')});
+      if(typ){$('ti').disabled=true;$('tc').hidden=true}
+      const right=typ?q.ans:q.o[q.a],ex=q.e?`<small>${esc(q.e)}</small>`:'';
+      $('fb').innerHTML=(ok?`<div class="fb ok">Goed! +${pts} punten${streak>1?` · reeks van ${streak}`:''}${ex}</div>`
+        :`<div class="fb no">${timeout?'Tijd om!':'Helaas.'} Het juiste antwoord: ${esc(right)}${ex}</div>`)+
+        `<button class="btn" id="nx">${i+1<qs.length?'Volgende vraag':'Bekijk je resultaat'}</button>`;
+      const go=()=>{i++;i<qs.length?next():end()};
+      $('nx').onclick=go;$('nx').focus();
+      keyH=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}};
+    }
+    if(typ){const chk=()=>fin(norm($('ti').value)===norm(q.ans),false);$('tc').onclick=chk;$('ti').onkeydown=e=>{if(e.key==='Enter')chk()};$('ti').focus()}
+    else{tiles.forEach((b,k)=>b.onclick=()=>fin(opts[k].ok,false));keyH=e=>{const k='1234'.indexOf(e.key);if(k>=0&&tiles[k])tiles[k].click()}}
+    const bar=$('tb');
+    timer=setInterval(()=>{const f=1-(Date.now()-t0)/(T*1000);bar.style.width=Math.max(0,f*100)+'%';if(f<=0)fin(false,true)},100);
+  }
+  function end(){
+    const ok=res.filter(r=>r.ok).length,pc=Math.round(ok/res.length*100),wrong=res.filter(r=>!r.ok);
+    show(`<div class="card" style="text-align:center"><div style="font-size:3rem">${pc>=80?'🥇':pc>=60?'🥈':'🥉'}</div><div class="score">${score}</div><p>punten · ${ok} van ${res.length} goed (${pc}%) · langste reeks: ${best}</p></div>`+(c.saved?'<p class="sub" style="text-align:center">✔ Opgeslagen bij Mijn quizzen</p>':'')+
+      (wrong.length?`<div class="card"><b>Dit oefen je nog best even</b><ul>${wrong.map(r=>`<li><b>${esc(r.q.q)}</b><br>Juist: ${esc(r.q.type==='type'?r.q.ans:r.q.o[r.q.a])}${r.q.e?`<br><small>${esc(r.q.e)}</small>`:''}</li>`).join('')}</ul></div>`:'')+
+      `<div class="row" style="margin-top:6px">${wrong.length?'<button class="btn" id="rw">Oefen je fouten</button>':''}<button class="btn" id="ag">Opnieuw spelen</button><button class="btn ghost" data-a="home">Menu</button></div>`);
+    if($('rw'))$('rw').onclick=()=>run(wrong.map(r=>r.q),c);
+    $('ag').onclick=()=>run(shuffle(qs),c);
+  }
+  next();
+}
+
+/* ---------- AI-aanroep ---------- */
+async function askAI(prompt,btn,msg){
+  const old=btn.textContent;btn.disabled=true;btn.textContent='AI is bezig…';msg.textContent='';
+  try{
+    let r;
+    const s=window.claude?await claude.use('sample'):null;
+    if(s)r=await s.json(prompt);
+    else{
+      if(!AI_URL)throw{code:'none'};
+      const res=await fetch(AI_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
+      if(!res.ok)throw{code:res.status===429?'rate_limited':'x'};
+      const t=(await res.json()).text||'';r=JSON.parse(t.slice(t.indexOf('['),t.lastIndexOf(']')+1));
+    }
+    if(!Array.isArray(r))r=Object.values(r||{}).find(Array.isArray)||[];
+    return r;
+  }catch(e){
+    const c=e&&e.code;
+    msg.textContent=(c==='none'||c==='not_granted')?'AI is hier niet ingesteld. Vul AI_URL in (zie leerknal-worker.js) of open de pagina via claude.ai.':c==='rate_limited'?'Even te druk. Wacht een minuut en probeer opnieuw.':'Dat lukte niet. Probeer opnieuw, eventueel met minder tekst.';
+    return null;
+  }finally{btn.disabled=false;btn.textContent=old}
+}
+
+/* ---------- samen spelen (live, via presence) ---------- */
+const CH='ABCDEFGHJKLMNPQRSTUVWXYZ',gcode=()=>Array.from({length:4},()=>CH[Math.random()*CH.length|0]).join('');
+async function getRoom(code,m){
+  const r=window.claude?await claude.use('room'):null;
+  if(!r){m.textContent='Samen spelen werkt alleen via claude.ai: iedereen moet ingelogd zijn en de pagina mogen openen (leden of uitgenodigde gasten). Via een openbare link of een eigen website werkt het niet.';return null}
+  try{return await r.join('lk'+code.toLowerCase())}catch(e){m.textContent='Verbinden met het spel lukte niet. Probeer opnieuw.';return null}
+}
+function multiScreen(){
+  const a=load();
+  show(`${back}<h1 style="font-size:2.2rem">Samen spelen</h1><div class="card"><b>Een spel hosten</b>`+(a.length?`<label for="mq">Quiz</label><select id="mq">${a.map(q=>`<option value="${q.id}">${esc(q.name)}</option>`).join('')}</select><div class="row"><div><label for="mn">Aantal vragen (leeg = alle)</label><input type="number" id="mn" min="1"></div><div><label for="ml">Seconden per vraag</label><input type="number" id="ml" min="5" max="60" value="20"></div></div><button class="btn" data-a="host">Maak een spel</button>`:'<p>Maak eerst een quiz met AI of een woordenlijst; die verschijnt dan hier.</p>')+`</div><div class="card"><b>Meedoen met een spel</b><label for="jc">Spelcode</label><input id="jc" maxlength="4" autocapitalize="characters" placeholder="ABCD"><label for="jn">Jouw naam</label><input id="jn" maxlength="20"><button class="btn" data-a="join">Doe mee</button></div><p id="msg" style="font-weight:700;min-height:1.4em"></p>`);
+}
+async function host(){
+  const m=$('msg'),q=find($('mq').value);if(!q)return;
+  const n=parseInt($('mn').value)||0,lim=Math.min(60,Math.max(5,parseInt($('ml').value)||20));
+  let qs=q.type==='qs'?shuffle(q.qs):wordQs(q.pairs,q.dir,q.lang);if(n)qs=qs.slice(0,n);
+  const code=gcode(),rm=await getRoom(code,m);if(!rm)return;
+  let i=-1,ph='lobby',S={},N={},opts=[],cor=0,t0=0,ht=null,off=null;
+  const players=()=>rm.peers().filter(p=>p.presence&&p.presence.role==='p'&&!p.isMe);
+  const nm=p=>String(p.presence.name||'?').slice(0,20);
+  const setG=g=>rm.presence({role:'h',g});
+  const close=()=>{clearInterval(ht);if(off)off();rm.leave();home()};
+  const tiles=(cl)=>`<div class="tiles">${opts.map((o,k)=>`<div class="tile t${k}${cl?(k===cor?' ok':' dim'):''}"><span class="sh">${SH[k]}</span>${esc(o.t)}</div>`).join('')}</div>`;
+  const board=()=>Object.keys(S).map(k=>[N[k]||'?',S[k]]).sort((a,b)=>b[1]-a[1]);
+  function upd(){
+    const p=players();
+    if(ph==='lobby'&&$('pl')){$('pl').textContent=p.length?p.length+' speler(s): '+p.map(nm).join(', '):'Wachten op spelers…';$('st').disabled=!p.length}
+    else if(ph==='q'&&$('cnt')){const a=p.filter(x=>x.presence.a&&x.presence.a.i===i).length;$('cnt').textContent=a+' / '+p.length+' antwoorden';if(p.length&&a>=p.length)reveal()}
+  }
+  function lobby(){
+    ph='lobby';setG({ph:'lobby'});
+    show(`<div class="card" style="text-align:center"><p>Open LeerKnal, kies <b>Samen spelen</b> en vul deze code in:</p><div class="score" style="letter-spacing:.15em">${code}</div><p id="pl"></p><button class="btn" id="st" disabled>Start het spel</button><button class="btn ghost" id="sp">Stop</button></div>`);
+    $('st').onclick=nextQ;$('sp').onclick=close;upd();
+  }
+  function nextQ(){
+    i++;if(i>=qs.length)return endG();
+    ph='q';const q=qs[i];opts=shuffle(q.o.map((t,k)=>({t,ok:k===q.a})));cor=opts.findIndex(o=>o.ok);
+    setG({ph:'q',i,n:qs.length,lim,q:q.q.slice(0,300),o:opts.map(o=>o.t.slice(0,120))});t0=Date.now();
+    show(`<div class="top"><span class="pill">${i+1} / ${qs.length}</span><span class="pill" id="cnt"></span></div><div class="bar"><i id="tb"></i></div><div class="q">${esc(q.q)}</div>${tiles(false)}`);
+    clearInterval(ht);ht=setInterval(()=>{const f=1-(Date.now()-t0)/(lim*1000);$('tb').style.width=Math.max(0,f*100)+'%';if(f<=0)reveal()},100);upd();
+  }
+  function reveal(){
+    if(ph!=='q')return;ph='r';clearInterval(ht);
+    players().forEach(p=>{N[p.peer]=nm(p);S[p.peer]=S[p.peer]||0;const a=p.presence.a;if(a&&a.i===i&&a.k===cor)S[p.peer]+=Math.round(500+500*Math.max(0,1-(+a.ms||lim*1000)/(lim*1000)))});
+    const s={};Object.keys(S).slice(0,40).forEach(k=>s[k]=S[k]);
+    const e=(qs[i].e||'').slice(0,200);setG({ph:'r',i,c:cor,e,s});
+    show(`<div class="q">${esc(qs[i].q)}</div>${tiles(true)}${e?`<p>${esc(e)}</p>`:''}<div class="card"><b>Tussenstand</b><ol>${board().slice(0,5).map(x=>`<li>${esc(x[0])}: ${x[1]}</li>`).join('')}</ol></div><button class="btn" id="nx">${i+1<qs.length?'Volgende vraag':'Eindstand'}</button>`);
+    $('nx').onclick=nextQ;
+  }
+  function endG(){
+    ph='end';const s={};Object.keys(S).slice(0,40).forEach(k=>s[k]=S[k]);setG({ph:'end',s});
+    show(`<div class="card" style="text-align:center"><div style="font-size:3rem">🏆</div><h2>Eindstand</h2><ol style="text-align:left">${board().map(x=>`<li>${esc(x[0])}: ${x[1]}</li>`).join('')}</ol></div><button class="btn" id="sp">Stop het spel</button>`);
+    $('sp').onclick=close;
+  }
+  off=rm.onPeers(upd);lobby();
+}
+async function join(){
+  const m=$('msg'),code=$('jc').value.trim().toUpperCase(),name=$('jn').value.trim().slice(0,20);
+  if(!/^[A-Z]{4}$/.test(code)||!name){m.textContent='Vul de spelcode (4 letters) en je naam in.';return}
+  const rm=await getRoom(code,m);if(!rm)return;
+  let key='',cur=null,t0=0,my=null,off=null;
+  rm.presence({role:'p',name});
+  const leave=()=>{if(off)off();rm.leave();home()};
+  const rank=g=>{const me=rm.peers().find(p=>p.isMe&&p.sameTab),sc=g.s||{},mine=me?(sc[me.peer]||0):0;return{mine,pos:Object.values(sc).filter(v=>v>mine).length+1,tot:Object.keys(sc).length}};
+  function render(){
+    const hp=rm.peers().find(p=>p.presence&&p.presence.role==='h'),g=hp&&hp.presence.g,k=g?g.ph+':'+g.i:'none';
+    if(k===key)return;key=k;
+    if(!g||g.ph==='lobby')show(`<div class="card" style="text-align:center"><div style="font-size:3rem">⏳</div><h2>Je doet mee als ${esc(name)}</h2><p>Wachten tot de host het spel start…</p><button class="btn ghost" id="lv">Verlaat het spel</button></div>`),$('lv').onclick=leave;
+    else if(g.ph==='q'){
+      cur=g;my=null;t0=Date.now();
+      show(`<div class="top"><span class="pill">${g.i+1} / ${g.n}</span><span class="pill">${esc(name)}</span></div><div class="bar"><i id="tb"></i></div><div class="q">${esc(g.q)}</div><div class="tiles">${g.o.map((t,k)=>`<button class="tile t${k}"><span class="sh">${SH[k]}</span>${esc(t)}</button>`).join('')}</div>`);
+      app.querySelectorAll('.tile').forEach((b,k)=>b.onclick=()=>{my=k;rm.presence({a:{i:g.i,k,ms:Date.now()-t0}});show('<div class="card" style="text-align:center"><div style="font-size:3rem">✅</div><h2>Antwoord verstuurd</h2><p>Wachten op de anderen…</p></div>')});
+      timer=setInterval(()=>{const f=1-(Date.now()-t0)/(g.lim*1000);const b=$('tb');if(b)b.style.width=Math.max(0,f*100)+'%'},100);
+    }else if(g.ph==='r'){
+      const ok=my!==null&&my===g.c,r=rank(g);
+      show(`<div class="fb ${ok?'ok':'no'}" style="font-size:1.4rem">${my===null?'Geen antwoord':ok?'Goed!':'Helaas'}${!ok&&cur&&cur.o?`<small>Juist: ${esc(cur.o[g.c])}</small>`:''}${g.e?`<small>${esc(g.e)}</small>`:''}</div><div class="card" style="text-align:center"><div class="score">${r.mine}</div><p>punten · plaats ${r.pos} van ${r.tot}</p></div><p style="text-align:center">Wachten op de volgende vraag…</p>`);
+    }else{
+      const r=rank(g);
+      show(`<div class="card" style="text-align:center"><div style="font-size:3rem">${r.pos===1?'🥇':r.pos===2?'🥈':r.pos===3?'🥉':'🎉'}</div><h2>Plaats ${r.pos} van ${r.tot}</h2><div class="score">${r.mine}</div><p>punten</p><button class="btn" id="lv">Terug naar het menu</button></div>`);$('lv').onclick=leave;
+    }
+  }
+  off=rm.onPeers(render);
+}
+
+/* ---------- opslag ---------- */
+const LS='leerknal.quizzen';
+const load=()=>{try{return JSON.parse(localStorage.getItem(LS))||[]}catch(e){return[]}};
+const save=a=>{try{localStorage.setItem(LS,JSON.stringify(a));return true}catch(e){return false}};
+const addQuiz=o=>save([{id:Date.now(),date:new Date().toLocaleDateString('nl-BE'),...o},...load()].slice(0,50));
+function savedScreen(){
+  const a=load();
+  show(`${back}<h1 style="font-size:2.2rem">Mijn quizzen</h1>`+(a.length?a.map(q=>`<div class="card"><b>${esc(q.name)}</b><br><small>${q.type==='qs'?q.qs.length+' vragen':q.pairs.length+' woorden'} · ${q.date}</small><div class="row"><button class="btn" data-a="sv" data-id="${q.id}">Spelen</button><button class="btn ghost" data-a="del" data-id="${q.id}">Verwijderen</button></div></div>`).join(''):'<div class="card">Nog niets opgeslagen. Elke quiz die je met AI maakt of met een woordenlijst start, komt hier vanzelf terecht.</div>')+'<p class="sub" style="margin-top:14px;font-size:.9rem">Quizzen worden bewaard in deze browser op dit toestel.</p>');
+}
+const find=id=>load().find(q=>String(q.id)===String(id));
+function startSaved(b){
+  const q=find(b.dataset.id);if(!q){savedScreen();return}
+  const N=q.type==='qs'?q.qs.length:q.pairs.length;
+  show(`<button class="link" data-a="mine">← Mijn quizzen</button><h1 style="font-size:2rem">${esc(q.name)}</h1><div class="card"><label for="sn">Aantal vragen (leeg = alle ${N})</label><input type="number" id="sn" min="1" max="${N}"><button class="btn" data-a="svgo" data-id="${q.id}">Start</button></div>`);
+}
+function playSaved(b){
+  const q=find(b.dataset.id);if(!q)return;
+  const n=parseInt($('sn').value)||0;
+  let qs=q.type==='qs'?shuffle(q.qs):wordQs(q.pairs,q.dir,q.lang);if(n)qs=qs.slice(0,n);
+  play(qs,{limit:q.type==='qs'?25:15});
+}
+
+/* ---------- schermen ---------- */
+function home(){show(`<h1>LeerKnal</h1><p class="sub">Oefen voor je toets als in een quiz: punten, tijdsdruk en een reeks goede antwoorden.</p><div class="menu">
+<button class="big c-b" data-a="ai"><span class="i">🧠</span><div><b>AI-quiz</b>Plak je leerwijzer en cursus, AI maakt de vragen</div></button>
+<button class="big c-r" data-a="taal"><span class="i">🗣️</span><div><b>Taaltrainer</b>Woordjes oefenen met een lijst van AI of van jezelf</div></button>
+<button class="big c-g" data-a="fr"><span class="i">🇫🇷</span><div><b>Franse werkwoorden</b>Présent, passé composé en futur simple</div></button>
+<button class="big c-p" data-a="multi"><span class="i">👥</span><div><b>Samen spelen</b>Host een spel of doe mee met een code</div></button>
+<button class="big c-y" data-a="mine"><span class="i">💾</span><div><b>Mijn quizzen</b>Opgeslagen quizzen opnieuw spelen</div></button></div>`)}
+
+function aiScreen(){show(`${back}<h1 style="font-size:2.2rem">AI-quiz</h1><div class="card">
+<label for="lw">Leerwijzer (wat moet je kennen?)</label>${upl('lw')}<textarea id="lw" placeholder="Plak hier je leerwijzer of leerstofoverzicht…"></textarea>
+<label for="cu">Cursus (de leerstof zelf)</label>${upl('cu')}<textarea id="cu" style="min-height:220px" placeholder="Plak hier de tekst van je cursus of samenvatting…"></textarea>
+<label for="qn">Naam van de quiz (optioneel)</label><input id="qn" maxlength="60"><label for="n">Aantal vragen (3 tot 30)</label><input type="number" id="n" min="3" max="30" value="12">
+<p class="err" id="msg"></p><button class="btn" data-a="aigo">Maak mijn quiz</button></div>`)}
+
+function taalScreen(){show(`${back}<h1 style="font-size:2.2rem">Taaltrainer</h1><div class="card">
+<div class="row"><div><label for="tt">Taal</label><select id="tt"><option>Engels</option><option>Frans</option><option>Duits</option><option>Spaans</option></select></div>
+<div><label for="tn">Niveau</label><select id="tn"><option>1e graad secundair</option><option>2e graad secundair</option><option>3e graad secundair</option></select></div></div>
+<label for="th">Thema</label><input id="th" placeholder="bv. school, eten en drinken, kleren">
+<div class="row"><div><label for="tw">Aantal woorden (AI)</label><input type="number" id="tw" min="4" max="40" value="12"></div><div><label for="tq">Aantal vragen (leeg = alle)</label><input type="number" id="tq" min="1"></div></div><label for="qn">Naam van de lijst (optioneel)</label><input id="qn" maxlength="60">
+<label for="td">Richting</label><select id="td"><option value="nl">Nederlands naar vreemde taal</option><option value="vt">Vreemde taal naar Nederlands</option><option value="mix">Door elkaar</option></select>
+<p class="err" id="msg"></p><button class="btn" data-a="tlai">Maak woordenlijst met AI</button></div>
+<div class="card"><b>Of gebruik je eigen lijst</b><label for="tl">Eén woord per regel: Nederlands = vertaling (minstens 4)</label><textarea id="tl" placeholder="huis = house&#10;school = school"></textarea><button class="btn" data-a="tlown">Start met mijn lijst</button></div>`)}
+
+function frScreen(){show(`${back}<h1 style="font-size:2.2rem">Franse werkwoorden</h1><div class="card">
+<label for="ft">Tijd</label><select id="ft"><option value="p">Présent</option><option value="c">Passé composé</option><option value="f">Futur simple</option><option value="mix">Alle drie door elkaar</option></select>
+<label for="fm">Antwoordmodus</label><select id="fm"><option value="mc">Meerkeuze</option><option value="type">Zelf typen</option></select>
+<label for="fn">Aantal vragen (leeg = alle)</label><input type="number" id="fn" min="1" value="15">
+<button class="btn" data-a="frgo">Start</button></div>`)}
+
+/* ---------- pdf/tekst inlezen ---------- */
+const upl=id=>`<div class="row"><input id="${id}r" placeholder="Pagina’s van de pdf, bv. 11-28 (leeg = alles)" aria-label="Paginabereik"><input type="file" id="${id}f" data-t="${id}" accept=".pdf,.txt,.md" aria-label="Bestand kiezen"></div><p id="${id}s" style="margin:6px 0;font-size:.9rem"></p>`;
+let pdfP=null;
+function loadPdf(){
+  if(pdfP)return pdfP;
+  const B='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/',ld=src=>new Promise((o,n)=>{const s=document.createElement('script');s.src=src;s.onload=o;s.onerror=n;document.head.appendChild(s)});
+  return pdfP=ld(B+'pdf.min.js').then(()=>ld(B+'pdf.worker.min.js')).then(()=>{pdfjsLib.GlobalWorkerOptions.workerSrc=B+'pdf.worker.min.js';return pdfjsLib}).catch(()=>{pdfP=null;throw new Error('lib')});
+}
+async function readFile(file,range){
+  if(!/\.pdf$/i.test(file.name))return await file.text();
+  const lib=await loadPdf(),doc=await lib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+  let pages=[];
+  if(range.trim())range.split(',').forEach(r=>{const[a,b]=r.split('-').map(x=>parseInt(x));if(a)for(let p=a;p<=(b||a);p++)pages.push(p)});
+  else for(let p=1;p<=doc.numPages;p++)pages.push(p);
+  pages=pages.filter(p=>p>=1&&p<=doc.numPages);
+  let out='';
+  for(const p of pages){const t=await(await doc.getPage(p)).getTextContent();out+=t.items.map(i=>i.str).join(' ')+'\n'}
+  return out;
+}
+app.onchange=async e=>{
+  const f=e.target;if(f.type!=='file'||!f.files[0])return;
+  const id=f.dataset.t,st=$(id+'s');st.textContent='Bezig met lezen…';
+  try{
+    const t=await readFile(f.files[0],$(id+'r').value);
+    if(t.trim().length<30){st.textContent='Geen tekst gevonden. Is het een gescande pdf? Plak de tekst dan zelf in het vak.';return}
+    $(id).value=t;
+    const max=id==='cu'?60000:15000;
+    st.textContent=`${f.files[0].name} gelezen (${t.length} tekens).`+(t.length>max?` Alleen de eerste ${max} tekens worden gebruikt: kies een kleiner paginabereik en laad het bestand opnieuw.`:' Je kunt de tekst hieronder nog aanpassen.');
+  }catch(err){st.textContent=err&&err.message==='lib'?'De pdf-lezer kon niet laden. Plak de tekst zelf in het vak.':'Dit bestand kon ik niet lezen. Plak de tekst zelf in het vak.'}
+};
+
+/* ---------- AI-quiz ---------- */
+async function aigo(b){
+  const lw=$('lw').value.trim().slice(0,15000),cu=$('cu').value.trim().slice(0,60000),n=Math.min(30,Math.max(3,parseInt($('n').value)||12)),m=$('msg');
+  if(cu.length<150){m.textContent='Plak eerst meer cursustekst (minstens een paar zinnen).';return}
+  const p=`Je bent een leerkracht. Maak ${n} meerkeuzevragen voor een leerling die een toets voorbereidt. De LEERWIJZER zegt wat de leerling moet kennen; de CURSUS is de leerstof. Gebruik uitsluitend informatie uit de CURSUS en leg de nadruk op wat de LEERWIJZER vraagt. Schrijf in dezelfde taal als de cursus. Elke vraag heeft precies 4 korte antwoordopties, één juist, met plausibele foute opties. Antwoord ENKEL met een JSON-array, zonder andere tekst: [{"q":"vraag","o":["A","B","C","D"],"a":0,"e":"korte uitleg"}] waarbij "a" de index (0-3) van het juiste antwoord is en willekeurig verdeeld wordt.\n\nLEERWIJZER:\n${lw||'(niet opgegeven, bepaal zelf de hoofdzaken)'}\n\nCURSUS:\n${cu}`;
+  const r=await askAI(p,b,m);if(!r)return;
+  const qs=r.filter(x=>x&&x.q&&Array.isArray(x.o)&&x.o.length===4&&Number.isInteger(x.a)&&x.a>=0&&x.a<4).map(x=>({q:String(x.q),o:x.o.map(String),a:x.a,e:x.e?String(x.e):''}));
+  if(qs.length<3){m.textContent='AI maakte geen bruikbare vragen. Probeer opnieuw.';return}
+  const sv=addQuiz({name:$('qn').value.trim()||('AI-quiz '+new Date().toLocaleDateString('nl-BE')),type:'qs',qs});play(qs,{limit:25,saved:sv});
+}
+
+/* ---------- taaltrainer ---------- */
+function wordQs(pairs,dir,lang){
+  return shuffle(pairs).map(p=>{
+    const d=dir==='mix'?(Math.random()<.5?'nl':'vt'):dir,to=d==='nl'?'vt':'nl';
+    const pool=[...new Set(pairs.map(x=>x[to]).filter(t=>norm(t)!==norm(p[to])))];
+    return{q:d==='nl'?`Wat is “${p.nl}” in het ${lang}?`:`Wat betekent “${p.vt}”?`,o:[p[to],...shuffle(pool).slice(0,3)],a:0};
+  });
+}
+function startWords(ps,lang,th){
+  const dir=$('td').value,sv=addQuiz({name:$('qn').value.trim()||`${lang}: ${th}`,type:'words',pairs:ps,lang,dir}),n=parseInt($('tq').value)||0;
+  let qs=wordQs(ps,dir,lang);if(n)qs=qs.slice(0,n);play(qs,{limit:15,saved:sv});
+}
+async function tlai(b){
+  const lang=$('tt').value,nw=Math.min(40,Math.max(4,parseInt($('tw').value)||12)),m=$('msg'),th=$('th').value.trim()||'algemene basiswoordenschat';
+  const p=`Maak een woordenlijst Nederlands – ${lang} voor een leerling in het ${$('tn').value}, thema "${th}". Geef precies ${nw} woorden of korte uitdrukkingen. Gebruik bij zelfstandige naamwoorden in het Frans of Duits het lidwoord. Antwoord ENKEL met een JSON-array: [{"nl":"huis","vt":"house"}]`;
+  const r=await askAI(p,b,m);if(!r)return;
+  const ps=r.filter(x=>x&&x.nl&&x.vt).map(x=>({nl:String(x.nl),vt:String(x.vt)}));
+  if(ps.length<4){m.textContent='AI maakte geen bruikbare lijst. Probeer opnieuw.';return}
+  startWords(ps,lang,th);
+}
+function tlown(){
+  const ps=$('tl').value.split('\n').map(l=>l.split(/\s*(?:=|\t|;| - )\s*/)).filter(a=>a.length>=2&&a[0].trim()&&a[1].trim()).map(a=>({nl:a[0].trim(),vt:a[1].trim()})),m=$('msg');
+  if(ps.length<4){m.textContent='Vul minstens 4 regels in, bv. huis = house.';return}
+  startWords(ps,$('tt').value,$('th').value.trim()||'eigen lijst');
+}
+
+/* ---------- Franse werkwoorden ---------- */
+const PR=['je','tu','il/elle','nous','vous','ils/elles'],TN={p:'présent',c:'passé composé',f:'futur simple'};
+const AUX={A:'ai as a avons avez ont'.split(' '),E:'suis es est sommes êtes sont'.split(' ')},FE='ai as a ons ez ont'.split(' ');
+const V=[
+['être','zijn','suis es est sommes êtes sont','été','A','ser'],['avoir','hebben','ai as a avons avez ont','eu','A','aur'],
+['aller','gaan','vais vas va allons allez vont','allé','E','ir'],['faire','doen / maken','fais fais fait faisons faites font','fait','A','fer'],
+['prendre','nemen','prends prends prend prenons prenez prennent','pris','A','prendr'],['vouloir','willen','veux veux veut voulons voulez veulent','voulu','A','voudr'],
+['pouvoir','kunnen','peux peux peut pouvons pouvez peuvent','pu','A','pourr'],['venir','komen','viens viens vient venons venez viennent','venu','E','viendr'],
+['savoir','weten','sais sais sait savons savez savent','su','A','saur'],['voir','zien','vois vois voit voyons voyez voient','vu','A','verr'],
+['dire','zeggen','dis dis dit disons dites disent','dit','A','dir'],['mettre','leggen / zetten','mets mets met mettons mettez mettent','mis','A','mettr'],
+['parler','praten','parle parles parle parlons parlez parlent','parlé','A','parler'],['finir','beëindigen','finis finis finit finissons finissez finissent','fini','A','finir']
+].map(a=>({inf:a[0],nl:a[1],p:a[2].split(' '),pp:a[3],x:a[4],f:a[5]}));
+function form(v,t,k){return t==='p'?v.p[k]:t==='c'?AUX[v.x][k]+' '+v.pp+(v.x==='E'&&k>=3?'s':''):v.f+FE[k]}
+function frgo(){
+  const t=$('ft').value,m=$('fm').value,n=parseInt($('fn').value)||0,all=[];
+  for(const v of V)for(let k=0;k<6;k++)for(const tt of(t==='mix'?'pcf':t)){
+    const ans=form(v,tt,k),pr=k===0&&/^[aeiouhéèêàâîï]/.test(ans)?'j’':PR[k],q=`${pr} ___  (${v.inf} · ${v.nl}) — ${TN[tt]}`;
+    if(m==='type'){all.push({type:'type',q,ans});continue}
+    const pool=[...new Set([0,1,2,3,4,5].map(j=>form(v,tt,j)).concat([...'pcf'].filter(z=>z!==tt).map(z=>form(v,z,k))))].filter(x=>x!==ans);
+    all.push({q,o:[ans,...shuffle(pool).slice(0,3)],a:0});
+  }
+  const qs=shuffle(all);play(n?qs.slice(0,n):qs,{limit:15});
+}
+
+const A={home,multi:multiScreen,host,join,mine:savedScreen,sv:startSaved,svgo:playSaved,del(b){if(!b.dataset.sure){b.dataset.sure=1;b.textContent='Zeker?';return}save(load().filter(q=>String(q.id)!==b.dataset.id));savedScreen()},ai:aiScreen,taal:taalScreen,fr:frScreen,aigo,tlai,tlown,frgo};
+app.onclick=e=>{const b=e.target.closest('[data-a]');if(b&&A[b.dataset.a])A[b.dataset.a](b)};
+home();
+</script></body></html>
