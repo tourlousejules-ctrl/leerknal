@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#46178f">
+  <title>LeerKnal – lokale AI-quiz</title>
+  <style>
+    :root{font-family:system-ui,sans-serif;color:#211337;background:#46178f;font-size:16px}*{box-sizing:border-box}body{margin:0;padding:20px;color:white}.wrap{max-width:760px;margin:auto}h1{font-size:clamp(2rem,8vw,3rem);margin:.35em 0}p{line-height:1.5}.card{background:#fff;color:#211337;border-radius:16px;padding:20px;margin:16px 0}label{display:block;font-weight:700;margin:14px 0 5px}textarea,input,select{width:100%;font:inherit;padding:12px;border:2px solid #e8def5;border-radius:10px;background:#fff;color:#211337}textarea{min-height:145px;resize:vertical}.btn{display:block;width:100%;border:0;border-radius:12px;padding:13px 18px;margin-top:12px;font:inherit;font-weight:800;background:#ffc00a;color:#261900;cursor:pointer}.btn:disabled{opacity:.55;cursor:wait}.muted{opacity:.85;font-size:.95rem}.status{white-space:pre-wrap;min-height:1.5em;font-weight:650}.progress{height:9px;background:#d9cbea;border-radius:99px;overflow:hidden}.progress i{display:block;width:0;height:100%;background:#864cbf;transition:width .2s}.question{font-size:1.25rem;font-weight:750}.option{display:block;width:100%;text-align:left;padding:13px;margin:8px 0;border:0;border-radius:10px;background:#eee7f8;color:#211337;font:inherit;cursor:pointer}.option.right{background:#26890c;color:white}.option.wrong{background:#e21b3c;color:white}.small{font-size:.92rem}.hidden{display:none!important}a{color:#fff}.warning{background:#fff2c2;border-radius:10px;padding:12px;color:#392800}
+  </style>
+</head>
+<body><main class="wrap">
+  <a href="index.html">← Terug naar LeerKnal</a>
+  <h1>🧠 LeerKnal AI-quiz</h1>
+  <p>Deze versie gebruikt een klein taalmodel <b>op je eigen toestel</b>, niet Claude. De eerste keer wordt het model gedownload; daarna kan het model vanuit de browsercache opnieuw gebruikt worden. Er is een recente browser met WebGPU nodig.</p>
+  <div class="warning small"><b>Goed om te weten:</b> dit is een experimentele lokale AI. Het model kan ongeveer 1 GB downloaden en heeft voldoende geheugen nodig. Je cursus wordt naar de AI op je toestel gestuurd, niet naar een AI-server.</div>
+  <section class="card" id="form">
+    <label for="course">Cursus of samenvatting</label>
+    <textarea id="course" maxlength="16000" placeholder="Plak hier je leerstof (minstens enkele zinnen)…"></textarea>
+    <label for="count">Aantal vragen</label>
+    <select id="count"><option>5</option><option selected>8</option><option>10</option></select>
+    <button class="btn" id="load">Laad lokale AI</button>
+    <div class="progress"><i id="bar"></i></div>
+    <p class="status" id="status" aria-live="polite">De AI start pas wanneer je op de knop drukt.</p>
+    <button class="btn hidden" id="make">Maak quiz uit mijn cursus</button>
+  </section>
+  <section class="card hidden" id="game"></section>
+</main>
+<script type="module">
+const $=id=>document.getElementById(id),MODEL='Llama-3.2-1B-Instruct-q4f16_1-MLC';
+let engine=null,items=[],position=0,score=0,locked=false;
+const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function status(text){$('status').textContent=text}
+$('load').addEventListener('click',async()=>{
+  $('load').disabled=true;
+  try{
+    if(!('gpu' in navigator)){throw new Error('Deze browser of dit toestel ondersteunt WebGPU niet. Probeer een recente versie van Chrome of Edge op een toestel met geschikte grafische hardware.')}
+    status('Lokale AI laden. Bij de eerste keer kan het downloaden even duren…');
+    const {CreateMLCEngine}=await import('https://esm.run/@mlc-ai/web-llm');
+    engine=await CreateMLCEngine(MODEL,{initProgressCallback:p=>{status(p.text||'Model wordt voorbereid…');$('bar').style.width=`${Math.round((p.progress||0)*100)}%`}});
+    $('bar').style.width='100%';status('Lokale AI is klaar. Je cursus blijft op dit toestel.');$('make').classList.remove('hidden');
+  }catch(e){status(`De lokale AI kon niet starten: ${e.message||'onbekende fout'}`);$('load').disabled=false}
+});
+$('make').addEventListener('click',async()=>{
+  const course=$('course').value.trim(),n=Number($('count').value);
+  if(course.length<100){status('Plak eerst wat meer cursustekst (minstens 100 tekens).');return}
+  $('make').disabled=true;status('De lokale AI maakt de vragen…');
+  try{
+    const response=await engine.chat.completions.create({messages:[
+      {role:'system',content:'Je bent een zorgvuldige Nederlandstalige leerkracht. Maak alleen meerkeuzevragen die beantwoord kunnen worden met de gegeven cursus. Geef uitsluitend een geldige JSON-array terug; geen markdown of uitleg. Elk object heeft exact de velden q (vraagtekst), o (array van exact vier antwoordopties), a (index van het juiste antwoord als getal 0-3), e (korte uitleg). Verdeel de juiste antwoordindexen over de opties.'},
+      {role:'user',content:`Maak ${n} verschillende leerzame meerkeuzevragen op basis van deze cursus. Verzin geen feiten die niet in de cursus staan. Cursus:\n${course}`}
+    ],temperature:.2,max_tokens:2200});
+    const text=response.choices?.[0]?.message?.content||'';
+    const match=text.match(/\[[\s\S]*\]/);if(!match)throw new Error('De AI gaf geen quiz in het verwachte formaat. Probeer opnieuw.');
+    const data=JSON.parse(match[0]);
+    items=data.filter(x=>x&&typeof x.q==='string'&&Array.isArray(x.o)&&x.o.length===4&&Number.isInteger(x.a)&&x.a>=0&&x.a<4).map(x=>({q:x.q,o:x.o.map(String),a:x.a,e:String(x.e||'')}));
+    if(items.length<3)throw new Error('Er zijn te weinig bruikbare vragen gemaakt. Probeer opnieuw met een duidelijkere of kortere cursus.');
+    position=0;score=0;$('game').classList.remove('hidden');render();$('game').scrollIntoView({behavior:'smooth'});status('Quiz klaar.');
+  }catch(e){status(`Quiz maken lukte niet: ${e.message||'probeer het opnieuw'}`)}finally{$('make').disabled=false}
+});
+function render(){
+  locked=false;const q=items[position];
+  $('game').innerHTML=`<div class="small">Vraag ${position+1} van ${items.length} · ${score} goed</div><p class="question">${escapeHtml(q.q)}</p>${q.o.map((o,i)=>`<button class="option" data-i="${i}">${escapeHtml(o)}</button>`).join('')}<p class="small" id="feedback" aria-live="polite"></p><button class="btn hidden" id="next">${position+1<items.length?'Volgende vraag':'Bekijk resultaat'}</button>`;
+  $('game').querySelectorAll('.option').forEach(b=>b.onclick=()=>{
+    if(locked)return;locked=true;const chosen=Number(b.dataset.i),ok=chosen===q.a;if(ok)score++;
+    $('game').querySelectorAll('.option').forEach((option,i)=>{option.disabled=true;if(i===q.a)option.classList.add('right');else if(i===chosen)option.classList.add('wrong')});
+    $('feedback').textContent=`${ok?'Goed!':'Helaas.'} ${q.e}`;$('next').classList.remove('hidden');
+    $('next').onclick=()=>{position++;if(position<items.length)render();else{$('game').innerHTML=`<h2>Quiz klaar!</h2><p>Je had ${score} van de items.length} goed.</p><button class="btn" id="again">Maak nog een quiz</button>`;$('game').innerHTML=$('game').innerHTML.replace('van de items.length','van de '+items.length);$('again').onclick=()=>{$('game').classList.add('hidden');$('make').focus()}}};
+  });
+}
+</script></body></html>
